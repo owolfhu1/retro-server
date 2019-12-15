@@ -20,6 +20,7 @@ const startInstance = (title, votesAllowed, owner, callback) => {
                     goods: [],
                     bads: [],
                     actions: [],
+                    trash: [],
                     users: [ owner ],
                     votes: { [owner]: votesAllowed },
                 };
