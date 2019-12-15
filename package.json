@@ -1,0 +1,17 @@
+{
+  "name": "retro-server",
+  "version": "1.0.0",
+  "description": "beckend for orion's retro client",
+  "main": "server.js",
+  "scripts": {
+    "test": "test"
+  },
+  "author": "Orion Wolf-Hubbard",
+  "license": "ISC",
+  "dependencies": {
+    "@types/socket.io": "^2.1.4",
+    "express": "^4.17.1",
+    "mongodb": "^3.3.5",
+    "socket.io": "^2.3.0"
+  }
+}
