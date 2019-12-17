@@ -215,13 +215,14 @@ io.on('connection', socket => {
     });
 
     socket.on('delete-all', () => {
-        if (!name) return;
-        const instance = liveInstances[instanceId];
-        instance.trash = [];
-        updateInstance(instance);
-        instance.users.forEach(user => {
-            io.to(ids[user]).emit('instance', instance);
-        });
+        if (isActive()) {
+            const instance = liveInstances[instanceId];
+            instance.trash = [];
+            updateInstance(instance);
+            instance.users.forEach(user => {
+                io.to(ids[user]).emit('instance', instance);
+            });
+        }
     });
 
     socket.on('disconnect', () => {
