@@ -16,6 +16,14 @@ io.on('connection', socket => {
     let name;
     let instanceId;
 
+    const isActive = () => {
+        if (!name || !instanceId ||socket.id !== ids[name] || !liveInstances[instanceId]) {
+            socket.emit('reset');
+            return false;
+        }
+        return true;
+    };
+
     socket.on('ping', console.log);
 
     socket.on('start', data => {
@@ -35,7 +43,7 @@ io.on('connection', socket => {
     for (let i in types) {
         const type = types[i];
         socket.on('new-' + type, text => {
-            if (name && instanceId) {
+            if (isActive()) {
                 const instance = liveInstances[instanceId];
                 instance[type].push({
                     text,
@@ -54,14 +62,15 @@ io.on('connection', socket => {
     }
 
     socket.on('drop', data => {
-        if (!name) return;
-        const instance = liveInstances[instanceId];
-        const item = instance[data.lastList].splice(data.lastIndex, 1)[0];
-        instance[data.nextList].splice(data.nextIndex, 0, item);
-        updateInstance(instance);
-        instance.users.forEach(user => {
-            io.to(ids[user]).emit('instance', instance);
-        });
+        if (isActive()) {
+            const instance = liveInstances[instanceId];
+            const item = instance[data.lastList].splice(data.lastIndex, 1)[0];
+            instance[data.nextList].splice(data.nextIndex, 0, item);
+            updateInstance(instance);
+            instance.users.forEach(user => {
+                io.to(ids[user]).emit('instance', instance);
+            });
+        }
     });
 
     socket.on('join', data => {
@@ -72,7 +81,7 @@ io.on('connection', socket => {
             ids[name] = socket.id;
             if (instance.users.indexOf(name) < 0) {
                 instance.users.push(name);
-                updateInstance(instance)
+                updateInstance(instance);
             }
             if (!instance.votes[name] && instance.votes[name] !== 0) {
                 instance.votes[name] = instance.votesAllowed;
@@ -109,7 +118,7 @@ io.on('connection', socket => {
 
     directions.forEach(type => {
         socket.on('vote-' + type, statementId => {
-            if(instanceId && name) {
+            if(isActive()) {
                 const instance = liveInstances[instanceId];
                 if (instance.votes[name] > 0) {
                     const statement = getStatement(instance, statementId);
@@ -127,7 +136,7 @@ io.on('connection', socket => {
         });
 
         socket.on('comment-vote-' + type, data => {
-            if(instanceId && name) {
+            if(isActive()) {
                 const instance = liveInstances[instanceId];
                 if (instance.votes[name] > 0) {
                     const statement = getStatement(instance, data.statementId);
@@ -146,59 +155,63 @@ io.on('connection', socket => {
     });
 
     socket.on('edit', data => {
-        if (!name) return;
-        const instance = liveInstances[instanceId];
-        const statement = getStatement(instance, data.statementId);
-        if (!statement) return;
-        statement.text = data.text;
-        statement.isEdited = true;
-        updateInstance(instance);
-        instance.users.forEach(user => {
-            io.to(ids[user]).emit('instance', instance);
-        });
+        if (isActive()) {
+            const instance = liveInstances[instanceId];
+            const statement = getStatement(instance, data.statementId);
+            if (!statement) return;
+            statement.text = data.text;
+            statement.isEdited = true;
+            updateInstance(instance);
+            instance.users.forEach(user => {
+                io.to(ids[user]).emit('instance', instance);
+            });
+        }
     });
 
     socket.on('comment', data => {
-        if (!name) return;
-        const instance = liveInstances[instanceId];
-        const statement = getStatement(instance, data.statementId);
-        if (!statement) return;
-        statement.comments.push({
-            text: data.text,
-            ups: 0,
-            downs: 0,
-        });
-        updateInstance(instance);
-        instance.users.forEach(user => {
-            io.to(ids[user]).emit('instance', instance);
-        });
+        if (isActive()) {
+            const instance = liveInstances[instanceId];
+            const statement = getStatement(instance, data.statementId);
+            if (!statement) return;
+            statement.comments.push({
+                text: data.text,
+                ups: 0,
+                downs: 0,
+            });
+            updateInstance(instance);
+            instance.users.forEach(user => {
+                io.to(ids[user]).emit('instance', instance);
+            });
+        }
     });
 
     socket.on('trash', data => {
-        if (!name) return;
-        const instance = liveInstances[instanceId];
-        const item = instance[data.lastList].splice(data.lastIndex, 1)[0];
-        item.from = data.lastList === 'trash' ? item.from : data.lastList;
+        if (isActive()) {
+            const instance = liveInstances[instanceId];
+            const item = instance[data.lastList].splice(data.lastIndex, 1)[0];
+            item.from = data.lastList === 'trash' ? item.from : data.lastList;
 
-        if(data.lastList === 'trash')
-            instance.trash.splice(data.nextIndex, 0, item);
-        else
-            instance.trash.unshift(item);
-        updateInstance(instance);
-        instance.users.forEach(user => {
-            io.to(ids[user]).emit('instance', instance);
-        });
+            if (data.lastList === 'trash')
+                instance.trash.splice(data.nextIndex, 0, item);
+            else
+                instance.trash.unshift(item);
+            updateInstance(instance);
+            instance.users.forEach(user => {
+                io.to(ids[user]).emit('instance', instance);
+            });
+        }
     });
 
     socket.on('delete', index => {
-        if (!name) return;
-        const instance = liveInstances[instanceId];
-        if (instance.trash.length <= index) return;
-        instance.trash.splice(index, 1);
-        updateInstance(instance);
-        instance.users.forEach(user => {
-            io.to(ids[user]).emit('instance', instance);
-        });
+        if (isActive()) {
+            const instance = liveInstances[instanceId];
+            if (instance.trash.length <= index) return;
+            instance.trash.splice(index, 1);
+            updateInstance(instance);
+            instance.users.forEach(user => {
+                io.to(ids[user]).emit('instance', instance);
+            });
+        }
     });
 
     socket.on('delete-all', () => {
