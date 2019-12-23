@@ -48,8 +48,8 @@ io.on('connection', socket => {
                 instance[type].push({
                     text,
                     comments: [],
-                    ups: 0,
-                    downs: 0,
+                    ups: [],
+                    downs: [],
                     id: id(),
                     author: name,
                 });
@@ -123,14 +123,32 @@ io.on('connection', socket => {
                 if (instance.votes[name] > 0) {
                     const statement = getStatement(instance, statementId);
                     if (!statement) return;
-                    statement[type]++;
+                    statement[type].push(name);
                     instance.votes[name]--;
                     updateInstance(instance);
                     instance.users.forEach(user => {
                         io.to(ids[user]).emit('instance', instance);
                     });
                 } else {
-                    socket.emit('test', 'you are out of votes');
+                    socket.emit('test', 'You are out of votes.');
+                }
+            }
+        });
+
+        socket.on('un-vote-' + type, statementId => {
+            if(isActive()) {
+                const instance = liveInstances[instanceId];
+                const statement = getStatement(instance, statementId);
+                if (!statement) return;
+                if (statement[type].indexOf(name) > -1) {
+                    statement[type].splice(statement[type].indexOf(name), 1);
+                    instance.votes[name]++;
+                    updateInstance(instance);
+                    instance.users.forEach(user => {
+                        io.to(ids[user]).emit('instance', instance);
+                    });
+                } else {
+                    socket.emit('test', 'You have not voted on that.');
                 }
             }
         });
@@ -141,14 +159,33 @@ io.on('connection', socket => {
                 if (instance.votes[name] > 0) {
                     const statement = getStatement(instance, data.statementId);
                     if (!statement) return;
-                    statement.comments[data.index][type]++;
+                    statement.comments[data.index][type].push(name);
                     instance.votes[name]--;
                     updateInstance(instance);
                     instance.users.forEach(user => {
                         io.to(ids[user]).emit('instance', instance);
                     });
                 } else {
-                    socket.emit('test', 'you are out of votes');
+                    socket.emit('test', 'You are out of votes.');
+                }
+            }
+        });
+
+        socket.on('un-comment-vote-' + type, data => {
+            if(isActive()) {
+                const instance = liveInstances[instanceId];
+                const statement = getStatement(instance, data.statementId);
+                if (!statement) return;
+                const comment = statement.comments[data.index];
+                if (comment[type].indexOf(name) > -1) {
+                    comment[type].splice(comment[type].indexOf(name), 1);
+                    instance.votes[name]++;
+                    updateInstance(instance);
+                    instance.users.forEach(user => {
+                        io.to(ids[user]).emit('instance', instance);
+                    });
+                } else {
+                    socket.emit('test', 'You have not voted on that.');
                 }
             }
         });
@@ -175,8 +212,8 @@ io.on('connection', socket => {
             if (!statement) return;
             statement.comments.push({
                 text: data.text,
-                ups: 0,
-                downs: 0,
+                ups: [],
+                downs: [],
             });
             updateInstance(instance);
             instance.users.forEach(user => {
@@ -206,6 +243,7 @@ io.on('connection', socket => {
         if (isActive()) {
             const instance = liveInstances[instanceId];
             if (instance.trash.length <= index) return;
+            removeVotesFromStatement(instance, instance.trash[index]);
             instance.trash.splice(index, 1);
             updateInstance(instance);
             instance.users.forEach(user => {
@@ -217,6 +255,7 @@ io.on('connection', socket => {
     socket.on('delete-all', () => {
         if (isActive()) {
             const instance = liveInstances[instanceId];
+            instance.trash.forEach(statement => removeVotesFromStatement(instance, statement));
             instance.trash = [];
             updateInstance(instance);
             instance.users.forEach(user => {
@@ -239,6 +278,15 @@ io.on('connection', socket => {
 });
 
 console.log('listening on 4242');
+
+const removeVotesFromStatement = (instance, statement) => {
+    statement.ups.forEach(name => instance.votes[name]++);
+    statement.downs.forEach(name => instance.votes[name]++);
+    statement.comments.forEach(comment => {
+        comment.ups.forEach(name => instance.votes[name]++);
+        comment.downs.forEach(name => instance.votes[name]++);
+    });
+};
 
 const getStatement = (instance, statementId) => {
     let statement;
