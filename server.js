@@ -227,7 +227,6 @@ io.on('connection', socket => {
             const instance = liveInstances[instanceId];
             const item = instance[data.lastList].splice(data.lastIndex, 1)[0];
             item.from = data.lastList === 'trash' ? item.from : data.lastList;
-
             if (data.lastList === 'trash')
                 instance.trash.splice(data.nextIndex, 0, item);
             else
@@ -261,6 +260,19 @@ io.on('connection', socket => {
             instance.users.forEach(user => {
                 io.to(ids[user]).emit('instance', instance);
             });
+        }
+    });
+
+    socket.on('lock', () => {
+        if (isActive()) {
+            const instance = liveInstances[instanceId];
+            if (instance.owner === name) {
+                instance.locked = !instance.locked;
+                updateInstance(instance);
+                instance.users.forEach(user => {
+                    io.to(ids[user]).emit('instance', instance);
+                });
+            }
         }
     });
 

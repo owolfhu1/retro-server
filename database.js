@@ -17,6 +17,7 @@ const startInstance = (title, votesAllowed, owner, callback) => {
                     title,
                     votesAllowed,
                     owner,
+                    locked: false,
                     goods: [],
                     bads: [],
                     actions: [],
