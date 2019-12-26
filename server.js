@@ -27,7 +27,7 @@ io.on('connection', socket => {
     socket.on('ping', console.log);
 
     socket.on('start', data => {
-        startInstance(data.title, data.votesAllowed, data.owner, result => {
+        startInstance(data.title, data.votesAllowed, data.negativeVotesAllowed, data.owner, result => {
             if (result) {
                 name = data.owner;
                 instanceId = data.title;
@@ -94,14 +94,13 @@ io.on('connection', socket => {
         } else {
             loadInstance(data.instanceId, instance => {
                 if (instance) {
+                    instance.users = [];
                     name = data.name;
                     instanceId = data.instanceId;
                     ids[name] = socket.id;
                     liveInstances[data.instanceId] = instance;
-                    if (instance.users.indexOf(name) < 0) {
-                        instance.users.push(name);
-                        updateInstance(instance)
-                    }
+                    instance.users.push(name);
+                    updateInstance(instance);
                     socket.emit('set-name', name);
                     socket.emit('instance', instance);
                     instance.users.forEach(user => {

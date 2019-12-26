@@ -2,7 +2,7 @@ const MongoClient = require('mongodb').MongoClient;
 const URL = 'mongodb://orion:pass12@ds251618.mlab.com:51618/heroku_dhbcgtr7';
 const DATABASE = 'heroku_dhbcgtr7';
 
-const startInstance = (title, votesAllowed, owner, callback) => {
+const startInstance = (title, votesAllowed, negativeVotesAllowed, owner, callback) => {
     if (!title || title.indexOf(' ') >= 0 || votesAllowed < 0) {
         callback('bad input');
         return;
@@ -16,6 +16,7 @@ const startInstance = (title, votesAllowed, owner, callback) => {
                 const instance = {
                     title,
                     votesAllowed,
+                    negativeVotesAllowed,
                     owner,
                     locked: false,
                     goods: [],
