@@ -8,6 +8,14 @@ const { startInstance, updateInstance, loadInstance } = require('./database');
 const liveInstances = {};
 const ids = {};
 
+const tryIt = callback => {
+    try {
+        callback();
+    } catch(error) {
+        console.log(error);
+    }
+};
+
 http.listen(port);
 
 io.on('connection', socket => {
@@ -27,265 +35,315 @@ io.on('connection', socket => {
     socket.on('ping', console.log);
 
     socket.on('start', data => {
-        startInstance(data.title, data.votesAllowed, data.negativeVotesAllowed, data.owner, result => {
-            if (result) {
-                name = data.owner;
-                instanceId = data.title;
-                ids[name] = socket.id;
-                liveInstances[data.title] = result;
-                socket.emit('goToInstance', { instance: result, name: data.owner });
-            } else
-                socket.emit('test', 'that instance has already been created');
+        tryIt(() => {
+            startInstance(data.title, data.votesAllowed, data.negativeVotesAllowed, data.owner, result => {
+                if (result) {
+                    name = data.owner;
+                    instanceId = data.title;
+                    ids[name] = socket.id;
+                    liveInstances[data.title] = result;
+                    socket.emit('goToInstance', {instance: result, name: data.owner});
+                } else
+                    socket.emit('test', 'that instance has already been created');
+            });
         });
     });
 
     const types = ['goods', 'bads', 'actions'];
-    for (let i in types) {
-        const type = types[i];
+    types.forEach(type => {
         socket.on('new-' + type, text => {
+            tryIt(() => {
+                if (isActive()) {
+                    const instance = liveInstances[instanceId];
+                    instance[type].push({
+                        text,
+                        comments: [],
+                        ups: [],
+                        downs: [],
+                        id: id(),
+                        author: name,
+                    });
+                    updateInstance(instance);
+                    instance.users.forEach(user => {
+                        io.to(ids[user]).emit('instance', instance);
+                    });
+                }
+            });
+
+        });
+    });
+
+    socket.on('drop', data => {
+        tryIt(() => {
             if (isActive()) {
                 const instance = liveInstances[instanceId];
-                instance[type].push({
-                    text,
-                    comments: [],
-                    ups: [],
-                    downs: [],
-                    id: id(),
-                    author: name,
-                });
+                if (!isValidInstanceIndexData(instance, data)) {
+                    socket.emit('instance', instance);
+                    return;
+                }
+                const item = instance[data.lastList].splice(data.lastIndex, 1)[0];
+                instance[data.nextList].splice(data.nextIndex, 0, item);
                 updateInstance(instance);
                 instance.users.forEach(user => {
                     io.to(ids[user]).emit('instance', instance);
                 });
             }
         });
-    }
-
-    socket.on('drop', data => {
-        if (isActive()) {
-            const instance = liveInstances[instanceId];
-            const item = instance[data.lastList].splice(data.lastIndex, 1)[0];
-            instance[data.nextList].splice(data.nextIndex, 0, item);
-            updateInstance(instance);
-            instance.users.forEach(user => {
-                io.to(ids[user]).emit('instance', instance);
-            });
-        }
     });
 
     socket.on('join', data => {
-        if (liveInstances[data.instanceId]) {
-            const instance = liveInstances[data.instanceId];
-            name = data.name;
-            instanceId = data.instanceId;
-            ids[name] = socket.id;
-            if (instance.users.indexOf(name) < 0) {
-                instance.users.push(name);
-                updateInstance(instance);
-            }
-            if (!instance.votes[name] && instance.votes[name] !== 0) {
-                instance.votes[name] = instance.votesAllowed;
-            }
-            socket.emit('set-name', name);
-            socket.emit('instance', instance);
-            instance.users.forEach(user => {
-                io.to(ids[user]).emit('instance', instance);
-            });
-        } else {
-            loadInstance(data.instanceId, instance => {
-                if (instance) {
-                    instance.users = [];
-                    name = data.name;
-                    instanceId = data.instanceId;
-                    ids[name] = socket.id;
-                    liveInstances[data.instanceId] = instance;
+        tryIt(() => {
+            if (liveInstances[data.instanceId]) {
+                const instance = liveInstances[data.instanceId];
+                name = data.name;
+                instanceId = data.instanceId;
+                ids[name] = socket.id;
+                if (instance.users.indexOf(name) < 0) {
                     instance.users.push(name);
                     updateInstance(instance);
-                    socket.emit('set-name', name);
-                    socket.emit('instance', instance);
-                    instance.users.forEach(user => {
-                        io.to(ids[user]).emit('instance', instance);
-                    });
-                } else {
-                    socket.emit('test', 'That instance does not exist.');
                 }
-            });
-        }
+                if (!instance.votes[name] && instance.votes[name] !== 0) {
+                    instance.votes[name] = instance.votesAllowed;
+                }
+                socket.emit('set-name', name);
+                socket.emit('instance', instance);
+                instance.users.forEach(user => {
+                    io.to(ids[user]).emit('instance', instance);
+                });
+            } else {
+                loadInstance(data.instanceId, instance => {
+                    if (instance) {
+                        instance.users = [];
+                        name = data.name;
+                        instanceId = data.instanceId;
+                        ids[name] = socket.id;
+                        liveInstances[data.instanceId] = instance;
+                        instance.users.push(name);
+                        updateInstance(instance);
+                        socket.emit('set-name', name);
+                        socket.emit('instance', instance);
+                        instance.users.forEach(user => {
+                            io.to(ids[user]).emit('instance', instance);
+                        });
+                    } else {
+                        socket.emit('test', 'That instance does not exist.');
+                    }
+                });
+            }
+        });
     });
 
     const directions = ['ups', 'downs'];
 
     directions.forEach(type => {
         socket.on('vote-' + type, statementId => {
-            if(isActive()) {
-                const instance = liveInstances[instanceId];
-                if (instance.votes[name] > 0) {
-                    const statement = getStatement(instance, statementId);
-                    if (!statement) return;
-                    statement[type].push(name);
-                    instance.votes[name]--;
-                    updateInstance(instance);
-                    instance.users.forEach(user => {
-                        io.to(ids[user]).emit('instance', instance);
-                    });
-                } else {
-                    socket.emit('test', 'You are out of votes.');
+            tryIt(() => {
+                if(isActive()) {
+                    const instance = liveInstances[instanceId];
+                    if (instance.votes[name] > 0) {
+                        const statement = getStatement(instance, statementId);
+                        if (!statement) return socket.emit('instance', instance);
+                        statement[type].push(name);
+                        instance.votes[name]--;
+                        updateInstance(instance);
+                        instance.users.forEach(user => {
+                            io.to(ids[user]).emit('instance', instance);
+                        });
+                    } else {
+                        socket.emit('test', 'You are out of votes.');
+                    }
                 }
-            }
+            });
         });
 
         socket.on('un-vote-' + type, statementId => {
-            if(isActive()) {
-                const instance = liveInstances[instanceId];
-                const statement = getStatement(instance, statementId);
-                if (!statement) return;
-                if (statement[type].indexOf(name) > -1) {
-                    statement[type].splice(statement[type].indexOf(name), 1);
-                    instance.votes[name]++;
-                    updateInstance(instance);
-                    instance.users.forEach(user => {
-                        io.to(ids[user]).emit('instance', instance);
-                    });
-                } else {
-                    socket.emit('test', 'You have not voted on that.');
+            tryIt(() => {
+                if(isActive()) {
+                    const instance = liveInstances[instanceId];
+                    const statement = getStatement(instance, statementId);
+                    if (!statement) return socket.emit('instance', instance);
+                    if (statement[type].indexOf(name) > -1) {
+                        statement[type].splice(statement[type].indexOf(name), 1);
+                        instance.votes[name]++;
+                        updateInstance(instance);
+                        instance.users.forEach(user => {
+                            io.to(ids[user]).emit('instance', instance);
+                        });
+                    } else {
+                        socket.emit('test', 'You have not voted on that.');
+                    }
                 }
-            }
+            });
+
         });
 
         socket.on('comment-vote-' + type, data => {
-            if(isActive()) {
-                const instance = liveInstances[instanceId];
-                if (instance.votes[name] > 0) {
-                    const statement = getStatement(instance, data.statementId);
-                    if (!statement) return;
-                    statement.comments[data.index][type].push(name);
-                    instance.votes[name]--;
-                    updateInstance(instance);
-                    instance.users.forEach(user => {
-                        io.to(ids[user]).emit('instance', instance);
-                    });
-                } else {
-                    socket.emit('test', 'You are out of votes.');
+            tryIt(() => {
+                if(isActive()) {
+                    const instance = liveInstances[instanceId];
+                    if (instance.votes[name] > 0) {
+                        const statement = getStatement(instance, data.statementId);
+                        if (!statement) return  socket.emit('instance', instance);
+                        const comment = getComment(statement, data.commentId);
+                        if (!comment) return  socket.emit('instance', instance);
+                        comment[type].push(name);
+                        instance.votes[name]--;
+                        updateInstance(instance);
+                        instance.users.forEach(user => {
+                            io.to(ids[user]).emit('instance', instance);
+                        });
+                    } else {
+                        socket.emit('test', 'You are out of votes.');
+                    }
                 }
-            }
+            });
         });
 
         socket.on('un-comment-vote-' + type, data => {
-            if(isActive()) {
-                const instance = liveInstances[instanceId];
-                const statement = getStatement(instance, data.statementId);
-                if (!statement) return;
-                const comment = statement.comments[data.index];
-                if (comment[type].indexOf(name) > -1) {
-                    comment[type].splice(comment[type].indexOf(name), 1);
-                    instance.votes[name]++;
-                    updateInstance(instance);
-                    instance.users.forEach(user => {
-                        io.to(ids[user]).emit('instance', instance);
-                    });
-                } else {
-                    socket.emit('test', 'You have not voted on that.');
+            tryIt(() => {
+                if(isActive()) {
+                    const instance = liveInstances[instanceId];
+                    const statement = getStatement(instance, data.statementId);
+                    if (!statement) return socket.emit('instance', instance);
+                    const comment = getComment(statement, data.commentId);
+                    if (!comment) return socket.emit('instance', instance);
+                    if (comment[type].indexOf(name) > -1) {
+                        comment[type].splice(comment[type].indexOf(name), 1);
+                        instance.votes[name]++;
+                        updateInstance(instance);
+                        instance.users.forEach(user => {
+                            io.to(ids[user]).emit('instance', instance);
+                        });
+                    } else {
+                        socket.emit('test', 'You have not voted on that.');
+                    }
                 }
-            }
+            });
         });
     });
 
     socket.on('edit', data => {
-        if (isActive()) {
-            const instance = liveInstances[instanceId];
-            const statement = getStatement(instance, data.statementId);
-            if (!statement) return;
-            statement.text = data.text;
-            statement.isEdited = true;
-            updateInstance(instance);
-            instance.users.forEach(user => {
-                io.to(ids[user]).emit('instance', instance);
-            });
-        }
-    });
-
-    socket.on('comment', data => {
-        if (isActive()) {
-            const instance = liveInstances[instanceId];
-            const statement = getStatement(instance, data.statementId);
-            if (!statement) return;
-            statement.comments.push({
-                text: data.text,
-                ups: [],
-                downs: [],
-            });
-            updateInstance(instance);
-            instance.users.forEach(user => {
-                io.to(ids[user]).emit('instance', instance);
-            });
-        }
-    });
-
-    socket.on('trash', data => {
-        if (isActive()) {
-            const instance = liveInstances[instanceId];
-            const item = instance[data.lastList].splice(data.lastIndex, 1)[0];
-            item.from = data.lastList === 'trash' ? item.from : data.lastList;
-            if (data.lastList === 'trash')
-                instance.trash.splice(data.nextIndex, 0, item);
-            else
-                instance.trash.unshift(item);
-            updateInstance(instance);
-            instance.users.forEach(user => {
-                io.to(ids[user]).emit('instance', instance);
-            });
-        }
-    });
-
-    socket.on('delete', index => {
-        if (isActive()) {
-            const instance = liveInstances[instanceId];
-            if (instance.trash.length <= index) return;
-            removeVotesFromStatement(instance, instance.trash[index]);
-            instance.trash.splice(index, 1);
-            updateInstance(instance);
-            instance.users.forEach(user => {
-                io.to(ids[user]).emit('instance', instance);
-            });
-        }
-    });
-
-    socket.on('delete-all', () => {
-        if (isActive()) {
-            const instance = liveInstances[instanceId];
-            instance.trash.forEach(statement => removeVotesFromStatement(instance, statement));
-            instance.trash = [];
-            updateInstance(instance);
-            instance.users.forEach(user => {
-                io.to(ids[user]).emit('instance', instance);
-            });
-        }
-    });
-
-    socket.on('lock', () => {
-        if (isActive()) {
-            const instance = liveInstances[instanceId];
-            if (instance.owner === name) {
-                instance.locked = !instance.locked;
+        tryIt(() => {
+            if (isActive()) {
+                const instance = liveInstances[instanceId];
+                const statement = getStatement(instance, data.statementId);
+                if (!statement) return socket.emit('instance', instance);
+                statement.text = data.text;
+                statement.isEdited = true;
                 updateInstance(instance);
                 instance.users.forEach(user => {
                     io.to(ids[user]).emit('instance', instance);
                 });
             }
-        }
+        });
+    });
+
+    socket.on('comment', data => {
+        tryIt(() => {
+            if (isActive()) {
+                const instance = liveInstances[instanceId];
+                const statement = getStatement(instance, data.statementId);
+                if (!statement) return socket.emit('instance', instance);
+                statement.comments.push({
+                    text: data.text,
+                    ups: [],
+                    downs: [],
+                    author: name,
+                    id: id(),
+                });
+                updateInstance(instance);
+                instance.users.forEach(user => {
+                    io.to(ids[user]).emit('instance', instance);
+                });
+            }
+        });
+    });
+
+    const isValidInstanceIndexData = (instance, data) => {
+        const item = instance[data.lastList][data.lastIndex];
+        return !!item && item.id === data.id;
+    };
+
+    socket.on('trash', data => {
+        tryIt(() => {
+            if (isActive()) {
+                const instance = liveInstances[instanceId];
+                if (!isValidInstanceIndexData(instance, data)) {
+                    socket.emit('instance', instance);
+                    return;
+                }
+                const item = instance[data.lastList].splice(data.lastIndex, 1)[0];
+                item.from = data.lastList === 'trash' ? item.from : data.lastList;
+                if (data.lastList === 'trash')
+                    instance.trash.splice(data.nextIndex, 0, item);
+                else
+                    instance.trash.unshift(item);
+                updateInstance(instance);
+                instance.users.forEach(user => {
+                    io.to(ids[user]).emit('instance', instance);
+                });
+            }
+        });
+    });
+
+    // TODO make this safe for when 2 people try to delete the same thing at nearly same time
+    socket.on('delete', index => {
+        tryIt(() => {
+            if (isActive()) {
+                const instance = liveInstances[instanceId];
+                if (instance.trash.length <= index) return socket.emit('instance', instance); // <-- improve here
+                removeVotesFromStatement(instance, instance.trash[index]);
+                instance.trash.splice(index, 1);
+                updateInstance(instance);
+                instance.users.forEach(user => {
+                    io.to(ids[user]).emit('instance', instance);
+                });
+            }
+        });
+    });
+
+    socket.on('delete-all', () => {
+        tryIt(() => {
+            if (isActive()) {
+                const instance = liveInstances[instanceId];
+                instance.trash.forEach(statement => removeVotesFromStatement(instance, statement));
+                instance.trash = [];
+                updateInstance(instance);
+                instance.users.forEach(user => {
+                    io.to(ids[user]).emit('instance', instance);
+                });
+            }
+        });
+    });
+
+    socket.on('lock', () => {
+        tryIt(() => {
+            if (isActive()) {
+                const instance = liveInstances[instanceId];
+                if (instance.owner === name) {
+                    instance.locked = !instance.locked;
+                    updateInstance(instance);
+                    instance.users.forEach(user => {
+                        io.to(ids[user]).emit('instance', instance);
+                    });
+                }
+            }
+        });
     });
 
     socket.on('disconnect', () => {
-        if (name) {
-            const instance = liveInstances[instanceId];
-            instance.users.splice(instance.users.indexOf(name), 1);
-            delete ids[name];
-            updateInstance(instance);
-            instance.users.forEach(user => {
-                io.to(ids[user]).emit('instance', instance);
-            });
-        }
-    })
+        tryIt(() => {
+            if (name) {
+                const instance = liveInstances[instanceId];
+                instance.users.splice(instance.users.indexOf(name), 1);
+                delete ids[name];
+                updateInstance(instance);
+                instance.users.forEach(user => {
+                    io.to(ids[user]).emit('instance', instance);
+                });
+            }
+        });
+    });
 });
 
 console.log('listening on 4242');
@@ -322,6 +380,16 @@ const getStatement = (instance, statementId) => {
         }
     });
     return statement;
+};
+
+const getComment = (statement, id) => {
+    let comment;
+    statement.comments.forEach(c => {
+        if (c.id === id) {
+            comment = c;
+        }
+    });
+    return comment;
 };
 
 const id = () => 'id-' + (Math.random()*0xFFFFFF<<0).toString(16);
