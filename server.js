@@ -259,6 +259,42 @@ io.on('connection', socket => {
         });
     });
 
+    socket.on('edit-comment', data => {
+        tryIt(() => {
+            if(isActive()) {
+                const instance = liveInstances[instanceId];
+                const statement = getStatement(instance, data.statementId);
+                if (!statement) return  socket.emit('instance', instance);
+                const comment = getComment(statement, data.commentId);
+                if (!comment) return  socket.emit('instance', instance);
+                comment.text = data.text;
+                comment.isEdited = true;
+                updateInstance(instance);
+                instance.users.forEach(user => {
+                    io.to(ids[user]).emit('instance', instance);
+                });
+            }
+        });
+    });
+
+    socket.on('delete-comment', data => {
+        tryIt(() => {
+            if(isActive()) {
+                const instance = liveInstances[instanceId];
+                const statement = getStatement(instance, data.statementId);
+                if (!statement) return  socket.emit('instance', instance);
+                const comment = getComment(statement, data.commentId);
+                if (!comment) return  socket.emit('instance', instance);
+                removeVotesFromStatement(instance, comment, true);
+                statement.comments.splice(statement.comments.indexOf(comment), 1);
+                updateInstance(instance);
+                instance.users.forEach(user => {
+                    io.to(ids[user]).emit('instance', instance);
+                });
+            }
+        });
+    });
+
     const isValidInstanceIndexData = (instance, data) => {
         const item = instance[data.lastList][data.lastIndex];
         return !!item && item.id === data.id;
@@ -348,13 +384,15 @@ io.on('connection', socket => {
 
 console.log('listening on 4242');
 
-const removeVotesFromStatement = (instance, statement) => {
+const removeVotesFromStatement = (instance, statement, isComment = false) => {
     statement.ups.forEach(name => instance.votes[name]++);
     statement.downs.forEach(name => instance.votes[name]++);
-    statement.comments.forEach(comment => {
-        comment.ups.forEach(name => instance.votes[name]++);
-        comment.downs.forEach(name => instance.votes[name]++);
-    });
+    if (!isComment) {
+        statement.comments.forEach(comment => {
+            comment.ups.forEach(name => instance.votes[name]++);
+            comment.downs.forEach(name => instance.votes[name]++);
+        });
+    }
 };
 
 const getStatement = (instance, statementId) => {
