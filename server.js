@@ -135,6 +135,20 @@ io.on('connection', socket => {
 
     const directions = ['ups', 'downs'];
 
+    socket.on('lock-trash', () => {
+        tryIt(() => {
+            if(isActive()) {
+                const instance = liveInstances[instanceId];
+                if (name !== instance.owner) return socket.emit('test', 'Only the instance owner can toggle the trash lock.');
+                instance.trashIsLocked = !instance.trashIsLocked; // bang
+                updateInstance(instance);
+                instance.users.forEach(user => {
+                    io.to(ids[user]).emit('instance', instance);
+                });
+            }
+        });
+    });
+
     directions.forEach(type => {
         socket.on('vote-' + type, statementId => {
             tryIt(() => {
@@ -327,6 +341,7 @@ io.on('connection', socket => {
         tryIt(() => {
             if (isActive()) {
                 const instance = liveInstances[instanceId];
+                if (instance.trashIsLocked) return socket.emit('test', 'You can not hard delete trash when it is locked.');
                 if (instance.trash.length <= index) return socket.emit('instance', instance); // <-- improve here
                 removeVotesFromStatement(instance, instance.trash[index]);
                 instance.trash.splice(index, 1);
@@ -342,6 +357,7 @@ io.on('connection', socket => {
         tryIt(() => {
             if (isActive()) {
                 const instance = liveInstances[instanceId];
+                if (instance.trashIsLocked) return socket.emit('test', 'You can not hard delete trash when it is locked.');
                 instance.trash.forEach(statement => removeVotesFromStatement(instance, statement));
                 instance.trash = [];
                 updateInstance(instance);
