@@ -8,14 +8,6 @@ const { startInstance, updateInstance, loadInstance } = require('./database');
 const liveInstances = {};
 const ids = {};
 
-const tryIt = callback => {
-    try {
-        callback();
-    } catch(error) {
-        console.log(error);
-    }
-};
-
 http.listen(port);
 
 io.on('connection', socket => {
@@ -23,6 +15,15 @@ io.on('connection', socket => {
 
     let name;
     let instanceId;
+
+    const tryIt = callback => {
+        try {
+            callback();
+        } catch(error) {
+            socket.emit('test', 'Something went wrong, details should be in the console.');
+            socket.emit('console', error);
+        }
+    };
 
     const isActive = () => {
         if (!name || !instanceId ||socket.id !== ids[name] || !liveInstances[instanceId]) {
@@ -81,6 +82,23 @@ io.on('connection', socket => {
                 const statement = getStatement(instance, data.id);
                 if (!statement) return socket.emit('instance', instance);
                 addOrRemoveEmoji(name, data.emoji, statement.emoji);
+                updateInstance(instance);
+                instance.users.forEach(user => {
+                    io.to(ids[user]).emit('instance', instance);
+                });
+            }
+        });
+    });
+
+    socket.on('comment-emoji', data => {
+        tryIt(() => {
+            if (isActive()) {
+                const instance = liveInstances[instanceId];
+                const statement = getStatement(instance, data.id);
+                if (!statement) return socket.emit('instance', instance);
+                const comment = getComment(statement, data.commentId);
+                if (!comment) return socket.emit('instance', instance);
+                addOrRemoveEmoji(name, data.emoji, comment.emoji);
                 updateInstance(instance);
                 instance.users.forEach(user => {
                     io.to(ids[user]).emit('instance', instance);
@@ -280,6 +298,7 @@ io.on('connection', socket => {
                     downs: [],
                     author: name,
                     id: id(),
+                    emoji: [],
                 });
                 updateInstance(instance);
                 instance.users.forEach(user => {
