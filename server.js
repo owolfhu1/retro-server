@@ -58,6 +58,7 @@ io.on('connection', socket => {
                     instance[type].push({
                         text,
                         comments: [],
+                        emoji: [],
                         ups: [],
                         downs: [],
                         id: id(),
@@ -70,6 +71,21 @@ io.on('connection', socket => {
                 }
             });
 
+        });
+    });
+
+    socket.on('emoji', data => {
+        tryIt(() => {
+            if (isActive()) {
+                const instance = liveInstances[instanceId];
+                const statement = getStatement(instance, data.id);
+                if (!statement) return socket.emit('instance', instance);
+                addOrRemoveEmoji(name, data.emoji, statement.emoji);
+                updateInstance(instance);
+                instance.users.forEach(user => {
+                    io.to(ids[user]).emit('instance', instance);
+                });
+            }
         });
     });
 
@@ -399,6 +415,32 @@ io.on('connection', socket => {
 });
 
 console.log('listening on 4242');
+
+const addOrRemoveEmoji = (name, emoji, list) => {
+    let emojiObj;
+    let index;
+    list.forEach(obj => {
+        if (emoji === obj.emoji) {
+            emojiObj = obj;
+            index = list.indexOf(emojiObj);
+        }
+    });
+    if (emojiObj) {
+        if (emojiObj.names.includes(name)) {
+            emojiObj.names.splice(emojiObj.names.indexOf(name), 1);
+            if (emojiObj.names.length === 0) {
+                list.splice(index, 1);
+            }
+        } else {
+            emojiObj.names.push(name);
+        }
+    } else {
+        list.push({
+            names: [ name ],
+            emoji
+        });
+    }
+};
 
 const removeVotesFromStatement = (instance, statement, isComment = false) => {
     statement.ups.forEach(name => instance.votes[name]++);
