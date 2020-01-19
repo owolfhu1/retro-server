@@ -20,8 +20,7 @@ io.on('connection', socket => {
         try {
             callback();
         } catch(error) {
-            socket.emit('test', 'Something went wrong, details should be in the console.');
-            socket.emit('console', error);
+            socket.emit('test', 'Something went wrong on the server. Tell Orion what you did if you care.');
         }
     };
 
