@@ -36,7 +36,7 @@ io.on('connection', socket => {
 
     socket.on('start', data => {
         tryIt(() => {
-            startInstance(data.title, data.votesAllowed, data.negativeVotesAllowed, data.owner, result => {
+            startInstance(data.title, data.votesAllowed, data.negativeVotesAllowed, data.owner, data.emojiAllowed, result => {
                 if (result) {
                     name = data.owner;
                     instanceId = data.title;
