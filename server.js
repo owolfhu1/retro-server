@@ -435,10 +435,13 @@ io.on('connection', socket => {
 console.log('listening on 4242');
 
 const addOrRemoveEmoji = (name, emoji, list) => {
+    if (typeof emoji === "string") {
+        return;
+    }
     let emojiObj;
     let index;
     list.forEach(obj => {
-        if (emoji === obj.emoji) {
+        if (emoji.colons === obj.emoji.colons) {
             emojiObj = obj;
             index = list.indexOf(emojiObj);
         }
