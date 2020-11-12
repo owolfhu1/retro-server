@@ -1,6 +1,6 @@
 const MongoClient = require('mongodb').MongoClient;
-const URL = 'mongodb://orion:pass12@ds251618.mlab.com:51618/heroku_dhbcgtr7';
-const DATABASE = 'heroku_dhbcgtr7';
+const URL = 'mongodb+srv://orion:pass@cluster0.gdt6i.mongodb.net/retro_data?retryWrites=true&w=majority';
+const DATABASE = 'retro_data';
 
 const startInstance = (title, votesAllowed, negativeVotesAllowed, owner, emojiAllowed, callback) => {
     if (!title || title.indexOf(' ') >= 0 || votesAllowed < 0) {
