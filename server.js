@@ -3,7 +3,7 @@ const http = require('http').Server(server);
 const io = require('socket.io')(http);
 const port = process.env.PORT || 4242;
 
-const { startInstance, updateInstance, loadInstance } = require('./database');
+const { startInstance, updateInstance, loadInstance, deleteInstance } = require('./database');
 
 const liveInstances = {};
 const ids = {};
@@ -417,9 +417,25 @@ io.on('connection', socket => {
         });
     });
 
+    socket.on('delete-instance', () => {
+        tryIt(() => {
+            if (isActive()) {
+                const instance = liveInstances[instanceId];
+                if (instance.owner === name) {
+                    deleteInstance(instanceId);
+                    instance.users.forEach(user => {
+                        io.to(ids[user]).emit('deleted-instance');
+                        delete ids[user];
+                    });
+                    delete liveInstances[instanceId];
+                }
+            }
+        });
+    });
+
     socket.on('disconnect', () => {
         tryIt(() => {
-            if (name) {
+            if (name && ids[name]) {
                 const instance = liveInstances[instanceId];
                 instance.users.splice(instance.users.indexOf(name), 1);
                 delete ids[name];

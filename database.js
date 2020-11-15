@@ -64,10 +64,14 @@ const loadInstance = (instanceId, callback) => {
     });
 };
 
+const deleteInstance = (instanceId) => {
+    MongoClient.connect(URL,  (err, db) => {
+        if (err) throw err;
+        let dbo = db.db(DATABASE);
+        dbo.collection('instances').remove({title: instanceId}, (err, res) => {
+            if (err) throw err;
+        });
+    });
+};
 
-
-
-
-
-
-module.exports = { startInstance, updateInstance, loadInstance };
+module.exports = { startInstance, updateInstance, loadInstance, deleteInstance };
