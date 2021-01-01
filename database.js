@@ -2,11 +2,12 @@ const MongoClient = require('mongodb').MongoClient;
 const URL = 'mongodb+srv://orion:pass@cluster0.gdt6i.mongodb.net/retro_data?retryWrites=true&w=majority';
 const DATABASE = 'retro_data';
 
-const startInstance = (title, votesAllowed, negativeVotesAllowed, owner, emojiAllowed, callback) => {
+const startInstance = (title, votesAllowed, negativeVotesAllowed, owner, emojiAllowed, columns, callback) => {
     if (!title || title.indexOf(' ') >= 0 || votesAllowed < 0) {
         callback('bad input');
         return;
     }
+    columns.forEach(col => col.items = []);
     MongoClient.connect(URL,  (err, db) => {
         if (err) throw err;
         let dbo = db.db(DATABASE);
@@ -20,9 +21,7 @@ const startInstance = (title, votesAllowed, negativeVotesAllowed, owner, emojiAl
                     emojiAllowed,
                     owner,
                     locked: false,
-                    goods: [],
-                    bads: [],
-                    actions: [],
+                    columns,
                     trash: [],
                     users: [ owner ],
                     votes: { [owner]: votesAllowed },

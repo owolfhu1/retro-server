@@ -20,6 +20,7 @@ io.on('connection', socket => {
         try {
             callback();
         } catch(error) {
+            console.log(error);
             socket.emit('test', 'Something went wrong.');
         }
     };
@@ -36,7 +37,7 @@ io.on('connection', socket => {
 
     socket.on('start', data => {
         tryIt(() => {
-            startInstance(data.title, data.votesAllowed, data.negativeVotesAllowed, data.owner, data.emojiAllowed, result => {
+            startInstance(data.title, data.votesAllowed, data.negativeVotesAllowed, data.owner, data.emojiAllowed, data.columns, result => {
                 if (result) {
                     name = data.owner;
                     instanceId = data.title;
@@ -49,29 +50,27 @@ io.on('connection', socket => {
         });
     });
 
-    const types = ['goods', 'bads', 'actions'];
-    types.forEach(type => {
-        socket.on('new-' + type, text => {
-            tryIt(() => {
-                if (isActive()) {
-                    const instance = liveInstances[instanceId];
-                    instance[type].push({
-                        text,
-                        comments: [],
-                        emoji: [],
-                        ups: [],
-                        downs: [],
-                        id: id(),
-                        author: name,
-                    });
-                    updateInstance(instance);
-                    instance.users.forEach(user => {
-                        io.to(ids[user]).emit('instance', instance);
-                    });
-                }
-            });
-
+    socket.on('new-statement', data => {
+        tryIt(() => {
+            if (isActive()) {
+                const instance = liveInstances[instanceId];
+                const index = instance.columns.map(col => col.text).indexOf(data.type);
+                instance.columns[index].items.push({
+                    text: data.value,
+                    comments: [],
+                    emoji: [],
+                    ups: [],
+                    downs: [],
+                    id: id(),
+                    author: name,
+                });
+                updateInstance(instance);
+                instance.users.forEach(user => {
+                    io.to(ids[user]).emit('instance', instance);
+                });
+            }
         });
+
     });
 
     socket.on('emoji', data => {
@@ -114,8 +113,9 @@ io.on('connection', socket => {
                     socket.emit('instance', instance);
                     return;
                 }
-                const item = instance[data.lastList].splice(data.lastIndex, 1)[0];
-                instance[data.nextList].splice(data.nextIndex, 0, item);
+                const item = (data.lastList === 'trash' ? instance[data.lastList] : instance.columns[data.lastList].items)
+                    .splice(data.lastIndex, 1)[0];
+                instance.columns[data.nextList].items.splice(data.nextIndex, 0, item);
                 updateInstance(instance);
                 instance.users.forEach(user => {
                     io.to(ids[user]).emit('instance', instance);
@@ -344,7 +344,8 @@ io.on('connection', socket => {
     });
 
     const isValidInstanceIndexData = (instance, data) => {
-        const item = instance[data.lastList][data.lastIndex];
+        const item = data.lastList === 'trash' ?
+            instance[data.lastList][data.lastIndex] : instance.columns[data.lastList].items[data.lastIndex];
         return !!item && item.id === data.id;
     };
 
@@ -356,7 +357,9 @@ io.on('connection', socket => {
                     socket.emit('instance', instance);
                     return;
                 }
-                const item = instance[data.lastList].splice(data.lastIndex, 1)[0];
+                const item =
+                    (data.lastList === 'trash' ? instance[data.lastList] : instance.columns[data.lastList].items)
+                        .splice(data.lastIndex, 1)[0];
                 item.from = data.lastList === 'trash' ? item.from : data.lastList;
                 if (data.lastList === 'trash')
                     instance.trash.splice(data.nextIndex, 0, item);
@@ -455,7 +458,7 @@ const addOrRemoveEmoji = (name, emoji, list) => {
         return;
     }
     let emojiObj;
-    let index;
+    let index = null;
     list.forEach(obj => {
         if (emoji.colons === obj.emoji.colons) {
             emojiObj = obj;
@@ -491,22 +494,12 @@ const removeVotesFromStatement = (instance, statement, isComment = false) => {
 };
 
 const getStatement = (instance, statementId) => {
-    let statement;
-    instance.goods.forEach(x => {
+    let statement = null;
+    instance.columns.forEach(col => col.items.forEach(x => {
         if (x.id === statementId) {
             statement = x;
         }
-    });
-    instance.bads.forEach(x => {
-        if (x.id === statementId) {
-            statement = x;
-        }
-    });
-    instance.actions.forEach(x => {
-        if (x.id === statementId) {
-            statement = x;
-        }
-    });
+    }));
     instance.trash.forEach(x => {
         if (x.id === statementId) {
             statement = x;
@@ -516,7 +509,7 @@ const getStatement = (instance, statementId) => {
 };
 
 const getComment = (statement, id) => {
-    let comment;
+    let comment = null;
     statement.comments.forEach(c => {
         if (c.id === id) {
             comment = c;
