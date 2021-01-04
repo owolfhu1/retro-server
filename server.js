@@ -105,6 +105,19 @@ io.on('connection', socket => {
         });
     });
 
+    socket.on('chat', data => {
+        tryIt(() => {
+            if (ids[data.to]) {
+                io.to(ids[data.to]).emit('chat', data.message);
+            } else {
+                socket.emit('test', 'The user ' + data.to + ' was not available and your message was not sent.');
+            }
+        });
+    });
+
+    socket.on('typing-start', toName => tryIt(() => io.to(ids[toName]).emit('typing-start', name)));
+    socket.on('typing-stop', toName => tryIt(() => io.to(ids[toName]).emit('typing-stop', name)));
+
     socket.on('drop', data => {
         tryIt(() => {
             if (isActive()) {
