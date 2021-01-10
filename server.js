@@ -57,6 +57,7 @@ io.on('connection', socket => {
                 const index = instance.columns.map(col => col.text).indexOf(data.type);
                 instance.columns[index].items.push({
                     text: data.value,
+                    notAnonymous: !data.anonymous,
                     comments: [],
                     emoji: [],
                     ups: [],
@@ -289,6 +290,7 @@ io.on('connection', socket => {
                 const statement = getStatement(instance, data.statementId);
                 if (!statement) return socket.emit('instance', instance);
                 statement.text = data.text;
+                statement.notAnonymous = !data.anonymous;
                 statement.isEdited = true;
                 updateInstance(instance);
                 instance.users.forEach(user => {
@@ -306,6 +308,7 @@ io.on('connection', socket => {
                 if (!statement) return socket.emit('instance', instance);
                 statement.comments.push({
                     text: data.text,
+                    notAnonymous: !data.anonymous,
                     ups: [],
                     downs: [],
                     author: name,
@@ -329,6 +332,7 @@ io.on('connection', socket => {
                 const comment = getComment(statement, data.commentId);
                 if (!comment) return  socket.emit('instance', instance);
                 comment.text = data.text;
+                comment.notAnonymous = !data.anonymous;
                 comment.isEdited = true;
                 updateInstance(instance);
                 instance.users.forEach(user => {
